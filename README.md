@@ -26,3 +26,8 @@ aws firehose put-record --delivery-stream-name KDS-dev-DeliveryStream-xxxx \
 --record='Data="{\"testdata\":\"yourtestdata\"}"'
 
 ```
+3. delete firehose
+```
+make delete-firehose
+
+```
