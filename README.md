@@ -8,7 +8,8 @@ make deploy-kds
 ```
 2. test
 ```
-aws kinesis put-record --stream-name kds-dev-KinesisDeliveryStream-xxxx --partition-key 123456 --data yourtestdata
+aws kinesis put-record --stream-name kds-dev-KinesisDeliveryStream-xxxx \
+--partition-key 123456 --data yourtestdata
 
 ```
 
