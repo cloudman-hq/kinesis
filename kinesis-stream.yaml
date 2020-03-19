@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: this template create kinesis stream and lambda functions
+Parameters:
+  OrgName:
+    Type: String
+    Description: organization name
+    Default: zen
+  Environment:
+    Type: String
+    Description: environment name
+    Default: dev
+  KinesisShards:
+    Type: Number
+    Description: The number of Kinesis shards to provision
+    Default: 1
+  LambdaBatchSize:
+    Type: Number
+    Description: Max number of messages to process from the Kinesis stream at once
+    Default: 1
+  LambdaTimeout:
+    Type: Number
+    Description: Max runtime for each invocation of Lambda function
+    Default: 300
+  LambdaMemory:
+    Type: Number
+    Description: Max RAM to use for each Lambda function
+    Default: 256
+  
+Resources:
+  LambdaExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Policies:
+      - PolicyName: "lambda-inline"
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Effect: "Allow"
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            - kinesis:Get*
+            - kinesis:Describe*
+            - kinesis:List*
+            Resource: "*"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: "Allow"
+          Principal:
+            Service:
+            - "lambda.amazonaws.com"
+          Action:
+          - "sts:AssumeRole"
+ 
+  KinesisDeliveryStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      ShardCount: !Ref KinesisShards
+      Tags:
+        - Key: StreamPurpose
+          Value: klek-delivery
+
+  KinesisEventSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      Enabled: true
+      EventSourceArn: !GetAtt [KinesisDeliveryStream, Arn]
+      FunctionName: !Ref KDSLambdaFunction
+      BatchSize: !Ref LambdaBatchSize
+      StartingPosition: LATEST
+
+  KDSLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.6
+      MemorySize: !Ref LambdaMemory
+      Timeout: !Ref LambdaTimeout
+      Code:
+        ZipFile: !Sub |
+          from __future__ import print_function
+          import boto3
+          import os
+
+          def handler(event, context):
+              stream_name = '${KinesisDeliveryStream}'
+              print('print event:')
+              print(event['Records'])
+              return {
+                  'message': 'print message to CW complete'
+              }
+Outputs:
+  KDSDeliveryStreamName:
+    Value: !Ref KinesisDeliveryStream
+    Description: Name of the Kinesis stream
+    Export:
+      Name: KinesisDeliveryStreamName

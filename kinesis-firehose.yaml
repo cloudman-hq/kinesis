@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: this template create kinesis and S3 bucket
+Parameters:
+  OrgName:
+    Type: String
+    Description: organization name
+    Default: zen
+  Environment:
+    Type: String
+    Description: environment name
+    Default: dev
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${OrgName}-${Environment}-kds"
+      PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+      Tags:
+          -
+            Key: "Owner"
+            Value: "Zen"
+          -
+            Key: "Environment"
+            Value: !Ref Environment
+
+  DeliveryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: firehose.amazonaws.com
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'sts:ExternalId': !Ref 'AWS::AccountId'
+             
+  DeliveryPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub firehose_delivery_policy_${Environment}
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:AbortMultipartUpload'
+              - 's3:GetBucketLocation'
+              - 's3:GetObject'
+              - 's3:ListBucket'
+              - 's3:ListBucketMultipartUploads'
+              - 's3:PutObject'
+            Resource:
+              - !GetAtt S3Bucket.Arn
+              - !Sub "${S3Bucket.Arn}/*"
+      Roles:
+        - !Ref DeliveryRole
+
+  # InvokeLambdaPolicy:
+  #   Type: AWS::IAM::Policy
+  #   Properties:
+  #     PolicyName: firehose_lambda_policy
+  #     PolicyDocument:
+  #       Version: 2012-10-17
+  #       Statement:
+  #         - Effect: Allow
+  #           Action:
+  #             - 'lambda:InvokeFunction'
+  #           Resource: 
+  #             - !GetAtt ProcessLambdaFunction.Arn
+  #     Roles:
+  #       - !Ref DeliveryRole
+
+  DeliveryStream:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !Sub 'arn:aws:s3:::${S3Bucket}'
+        BufferingHints:
+          IntervalInSeconds: 60
+          SizeInMBs: 50
+        CompressionFormat: UNCOMPRESSED
+        Prefix: firehose/
+        RoleARN: !GetAtt DeliveryRole.Arn
+        # ProcessingConfiguration:
+        #   Enabled: true
+        #   Processors:
+        #     - Parameters:
+        #         - ParameterName: LambdaArn
+        #           ParameterValue: !GetAtt ProcessLambdaFunction.Arn 
+        #       Type: Lambda 
+
+  # ProcessLambdaExecutionRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #       - Effect: Allow
+  #         Principal:
+  #           Service:
+  #           - lambda.amazonaws.com
+  #         Action:
+  #         - sts:AssumeRole
+  #     Policies:
+  #       - PolicyName: allowLambdaLogs
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #           - Effect: Allow
+  #             Action:
+  #             - logs:*
+  #             Resource: arn:aws:logs:*:*:*
