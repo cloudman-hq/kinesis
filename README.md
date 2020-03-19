@@ -1,5 +1,5 @@
 # kinesis
-kinesis stream and firehose
+kinesis stream and firehose resources for testing cloud-man
 # kinesis stream
 1. how to create kinesis steam
 ```
